@@ -3,13 +3,15 @@ const express = require("express");
 const path = require("path");
 const bodyParser = require("body-parser");
 const handlebars = require("express-handlebars");
+const clientSessions = require("client-sessions");
+var bcrypt = require('bcryptjs');
 const app = express();
 const mongoose = require("mongoose");
 
 const Schema = mongoose.Schema;
 //4qOR3EYlGGioqxKW
-const registration = mongoose.createConnection("mongodb+srv://tliu84:4qOR3EYlGGioqxKW@cluster0.fhmfm06.mongodb.net/registration2?retryWrites=true&w=majority");
-const blog = mongoose.createConnection("mongodb+srv://tliu84:4qOR3EYlGGioqxKW@cluster0.fhmfm06.mongodb.net/registration2?retryWrites=true&w=majority");
+const registration = mongoose.createConnection("mongodb+srv://tliu84:4qOR3EYlGGioqxKW@cluster0.fhmfm06.mongodb.net/registration3?retryWrites=true&w=majority");
+const blog = mongoose.createConnection("mongodb+srv://tliu84:4qOR3EYlGGioqxKW@cluster0.fhmfm06.mongodb.net/registration3?retryWrites=true&w=majority");
 
 app.use(express.static("img"));
 
@@ -46,6 +48,13 @@ app.engine(".hbs", handlebars.engine({ extname: '.hbs' }));
 app.set('view engine', '.hbs');
 
 app.use(bodyParser.urlencoded({ extended: true }));
+
+app.use(clientSessions({
+    cookieName: "session", // this is the object name that will be added to 'req'
+    secret: "assignment06_web322", // this should be a long un-guessable string.
+    duration: 5 * 60 * 1000, // duration of the session in milliseconds (5 minutes)
+    activeDuration: 1000 * 60 // the session will be extended by this many ms each request (1 minute)
+}));
 
 // setup a 'route' to listen on the default url path
 app.get("/", (req, res) => {
@@ -126,22 +135,41 @@ app.post("/login", (req, res) => {
         return;
     }
 
-    customer.findOne({ username: userdata.user, password: userdata.pass }, ["fname", "lname", "username"]).exec().then((data) => {
-        if (data) {
-            if (data.id == "6366c66a9afb45a8af4a82c4") {
-                res.render("login_Dashboard", { fname: data.fname, lname: data.lname, username: data.username, layout: false });
+    customer.findOne({ username: userdata.user }, ["fname", "lname", "username", "password"]).exec().then((data) => {
+        bcrypt.compare(userdata.pass, data.password).then((result) => {
+            // result === true
+            console.log(result);
+            if (result) {
+                req.session.userdata = {
+                    username: userdata.user,
+                    password: userdata.pass
+                }
+                if (!req.session.userdata) {
+                    res.redirect("/login");
+                }
+                console.log("client-session created");
+                if (data.id == "638629d92da8e5147fa62b0d") {
+                    res.render("login_Dashboard", { fname: data.fname, lname: data.lname, username: data.username, layout: false });
+                    return;
+                }
+                else {
+                    res.render("loginuser_Dashboard", { fname: data.fname, lname: data.lname, username: data.username, layout: false });
+                    return;
+                }
+            } else {
+                res.render("login", { error: "Sorry, you entered the wrong username and/or password", layout: false });
                 return;
             }
-            else {
-                res.render("loginuser_Dashboard", { fname: data.fname, lname: data.lname, username: data.username, layout: false });
-                return;
-            }
-        } else {
-            res.render("login", { error: "Sorry, you entered the wrong username and/or password", layout: false });
-            return;
-        }
+        });
+
     });
 
+});
+
+app.get("/logout", function (req, res) {
+    console.log("Logout");
+    req.session.reset();
+    res.redirect("/login");
 });
 
 app.get("/registration", function (req, res) {
@@ -217,24 +245,30 @@ app.post("/registration", (req, res) => {
             break;
         }
     }
-    let useaccount = new customer({
-        fname: userdata.fname,
-        lname: userdata.lname,
-        email: userdata.email,
-        username: username,
-        Address1: userdata.Address1,
-        Address2: userdata.Address2,
-        city: userdata.city,
-        postal: userdata.postalcode,
-        country: userdata.country,
-        password: userdata.password
-    }).save((e, data) => {
-        if (e) {
-            console.log(e);
-        } else {
-            console.log(data);
-        }
+
+    bcrypt.hash(userdata.password, 10).then(hash => { // Hash the password using a Salt that was generated using 10 rounds
+        // TODO: Store the resulting "hash" value in the DB
+        let useaccount = new customer({
+            fname: userdata.fname,
+            lname: userdata.lname,
+            email: userdata.email,
+            username: username,
+            Address1: userdata.Address1,
+            Address2: userdata.Address2,
+            city: userdata.city,
+            postal: userdata.postalcode,
+            country: userdata.country,
+            password: hash
+        }).save((e, data) => {
+            if (e) {
+                console.log(e);
+            } else {
+                console.log(data);
+            }
+        });
+        console.log(hash);
     });
+
     res.render("dashboard", { layout: false });
 
 });
