@@ -72,9 +72,17 @@ app.get("/", (req, res) => {
     });
 });
 
-app.get("/admin", (req, res) => {
+app.get("/admin", ensureLogin, (req, res) => {
     res.render("Administrator", { layout: false });
 });
+
+function ensureLogin(req, res, next) {
+    if (!req.session.admindata) {
+        res.redirect("/login");
+    } else {
+        next();
+    }
+}
 
 app.post("/admin", (req, res) => {
     console.log(req.body.img);
@@ -99,7 +107,7 @@ app.post("/article", function (req, res) {
     });
 });
 
-app.post("/update", (req, res) => {
+app.post("/update", ensureLogin, (req, res) => {
     blogcon.updateOne({
         _id: req.body.ids
     }, {
@@ -140,19 +148,20 @@ app.post("/login", (req, res) => {
             // result === true
             console.log(result);
             if (result) {
-                req.session.userdata = {
-                    username: userdata.user,
-                    password: userdata.pass
-                }
-                if (!req.session.userdata) {
-                    res.redirect("/login");
-                }
-                console.log("client-session created");
                 if (data.id == "638629d92da8e5147fa62b0d") {
+                    req.session.admindata = {
+                        username: userdata.user,
+                        password: userdata.pass
+                    }
+                    console.log("Admin-session created");
                     res.render("login_Dashboard", { fname: data.fname, lname: data.lname, username: data.username, layout: false });
                     return;
                 }
                 else {
+                    req.session.userdata = {
+                        username: userdata.user,
+                        password: userdata.pass
+                    }
                     res.render("loginuser_Dashboard", { fname: data.fname, lname: data.lname, username: data.username, layout: false });
                     return;
                 }
